@@ -14,17 +14,17 @@ def some_action(post):
     In this implementation we just print the post's created time.
     """
     print(post["created_time"])
+    print(post["message"])
+    print(post)
 
 
 # You'll need an access token here to do anything.  You can get a temporary one
 # here: https://developers.facebook.com/tools/explorer/
-access_token = ""
-# Look at my profile by using my Facebook id.
-user = "vascomorais"
 
 graph = facebook.GraphAPI(access_token)
 profile = graph.get_object(user)
 posts = graph.get_connections(profile["id"], "posts")
+comments = graph.get_connections(id='me', connection_name='comments')
 
 # Wrap this block in a while loop so we can keep paginating requests until
 # finished.
@@ -39,3 +39,20 @@ while True:
         # When there are no more pages (['paging']['next']), break from the
         # loop and end the script.
         break
+
+#me?fields=id,name,posts{message,created_time,comments{created_time,message}}
+
+
+
+# Local Multiprocessing (Partition by Year to each Core)
+from multiprocessing import Pool
+import pandas as pd
+
+def wordCount(messages):
+    year, message = messages
+    return pd.DataFrame({"Word": message["Word"], "Count": message["Word"].count()}, index=[year])
+
+with Pool(4) as p:
+    results = p.map(wordCount, posts.groupby("Year"))
+
+result_df = pd.concat(results)
