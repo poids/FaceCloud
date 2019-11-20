@@ -1,46 +1,53 @@
 """
-A simple example script to get all posts on a user's timeline.
-Originally created by Mitchell Stewart.
-<https://gist.github.com/mylsb/10294040>
+Recursive function to get all posts and comments on a user's timeline.
+Originally created by Vasco Morais (November 2019).
+<https://github.com/poids/FaceCloud>
 """
 
-import facebook
 import requests
 
+access_token=
 
-def some_action(post):
-    """ Here you might want to do something with each post. E.g. grab the
-    post's message (post['message']) or the post's picture (post['picture']).
-    In this implementation we just print the post's created time.
-    """
-    print(post["created_time"])
-    print(post["message"])
-    print(post)
+response=requests.get("https://graph.facebook.com/v5.0/me?fields=id%2Cname%2Cposts%7Bmessage%2Ccreated_time%2Ccomments%7Bcreated_time%2Cmessage%7D%7D&access_token={token}".format(token=access_token))
+response_json=response.json()
+
+#Build dictionary of posts and comments
+def getPostsAndComments(post, posts_and_comments):
+    #Get all posts
+    posts_and_comments.update(
+        { post['created_time']:post['message'] }
+        )
+    #Get all comments
+    if 'comment' in post:
+        comments = post["comments"]["data"]
+        posts_and_comments.update(
+            { comment['created_time']:comment['message'] for comment in comments }
+        )
+
+#Recursive function which parses through all pages of facebook to return posts and comments
+def requestFacebookData(response_json, posts_and_comments={}):
+    if response_json['data']==[]:
+        return posts_and_comments
+    else:
+        post_data=response_json['data']
+        
+        for post in post_data:
+            if 'message' in post:
+                getPostsAndComments(post, posts_and_comments)
+        
+        paging=response_json['paging']['next']
+        response_json=requests.get(paging).json()
+        return requestFacebookData(response_json, posts_and_comments)
+
+posts_and_comments=requestFacebookData(response_json['posts'], dict())
 
 
-# You'll need an access token here to do anything.  You can get a temporary one
-# here: https://developers.facebook.com/tools/explorer/
 
-graph = facebook.GraphAPI(access_token)
-profile = graph.get_object(user)
-posts = graph.get_connections(profile["id"], "posts")
-comments = graph.get_connections(id='me', connection_name='comments')
 
-# Wrap this block in a while loop so we can keep paginating requests until
-# finished.
-while True:
-    try:
-        # Perform some action on each post in the collection we receive from
-        # Facebook.
-        [some_action(post=post) for post in posts["data"]]
-        # Attempt to make a request to the next page of data, if it exists.
-        posts = requests.get(posts["paging"]["next"]).json()
-    except KeyError:
-        # When there are no more pages (['paging']['next']), break from the
-        # loop and end the script.
-        break
 
-#me?fields=id,name,posts{message,created_time,comments{created_time,message}}
+
+
+
 
 
 
@@ -53,6 +60,41 @@ def wordCount(messages):
     return pd.DataFrame({"Word": message["Word"], "Count": message["Word"].count()}, index=[year])
 
 with Pool(4) as p:
-    results = p.map(wordCount, posts.groupby("Year"))
+    results = p.map(wordCount, posts_and_comments.groupby("Year"))
 
 result_df = pd.concat(results)
+
+#Local Multiprocessing using Dask
+import dask.dataframe as dd
+#Partition dataframe into the 4 Available Cores
+messagesDF = dd.from_pandas(posts_and_comments, npartitions=4)
+#Run parallel computations on each partition
+result_df = messagesDF.groupby('Year').Word.count().compute()
+
+#Using PySpark Locally
+athlete_events_spark.groupBy('Year').count('Word').show()
+
+#Spark Submit
+spark-submit \
+  --master local[4] \
+  /path/to/spark-script.py
+
+#Spark Script
+if __name__ == "__main__":
+    spark = SparkSession.builder.getOrCreate()
+    posts_and_comments = (spark
+    .read
+    .csv("/path/to/data/posts_and_comments.csv",
+        header=True,
+        inferSchema=True
+        escape='"'))
+
+    posts_and_comments = (posts_and_comments
+    .withColumn("Words",
+        posts_and_comments.Words.cast("integer")))
+
+    print(posts_and_comments
+        .groupBy('Year')
+        .count('Words')
+        .orderBy('Count')
+        .show())
