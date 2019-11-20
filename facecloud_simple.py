@@ -5,8 +5,13 @@ Originally created by Vasco Morais (November 2019).
 """
 
 import requests
+import re
+import wordcloud
 
-access_token=
+#List of Words not to include in wordcloud
+STOPWORDS=wordcloud.STOPWORDS
+
+access_token=''
 
 response=requests.get("https://graph.facebook.com/v5.0/me?fields=id%2Cname%2Cposts%7Bmessage%2Ccreated_time%2Ccomments%7Bcreated_time%2Cmessage%7D%7D&access_token={token}".format(token=access_token))
 response_json=response.json()
@@ -39,10 +44,29 @@ def requestFacebookData(response_json, posts_and_comments={}):
         response_json=requests.get(paging).json()
         return requestFacebookData(response_json, posts_and_comments)
 
+#Counts all words in each posts; Groups by Year and Word
+def getWordCount(posts_and_comments, fb_WordCount={}):
+    for date, v in posts_and_comments.items():
+        year=int(date.split('-')[0])
+        vals=re.findall(r'\w+', v)
+        fb_WordCount.update(
+            { (year, val) : vals.count(val) for val in set(vals) if (len(val) >= 3) and val not in STOPWORDS }
+            )
+    return fb_WordCount
+
+#Counts all words in each posts; Groups by Year and Word
+def getWordCount(posts_and_comments, fb_WordCount={}):
+    for date, v in posts_and_comments.items():
+        year=int(date.split('-')[0])
+        vals=re.findall(r'\w+', v)
+        fb_WordCount.update(
+            { (year, val) : vals.count(val) for val in set(vals) if (len(val) >= 3) and val not in STOPWORDS }
+            )
+    return fb_WordCount
+
 posts_and_comments=requestFacebookData(response_json['posts'], dict())
 
-
-
+fb_WordCount=getWordCount(posts_and_comments)
 
 
 
