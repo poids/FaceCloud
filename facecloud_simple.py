@@ -44,8 +44,8 @@ def requestFacebookData(response_json, posts_and_comments={}):
         response_json=requests.get(paging).json()
         return requestFacebookData(response_json, posts_and_comments)
 
-#Counts all words in each posts; Groups by Year and Word
-def getWordCount(posts_and_comments, fb_WordCount={}):
+#Counts all words in each posts; Groups by Year and Word (for running locally)
+def getWordCount_LOCAL(posts_and_comments, fb_WordCount={}):
     for date, v in posts_and_comments.items():
         year=int(date.split('-')[0])
         vals=re.findall(r'\w+', v)
@@ -54,19 +54,52 @@ def getWordCount(posts_and_comments, fb_WordCount={}):
             )
     return fb_WordCount
 
-#Counts all words in each posts; Groups by Year and Word
-def getWordCount(posts_and_comments, fb_WordCount={}):
+#Counts all words in each posts; {Key: dateTime, Values: year, word, frequency }
+def getWordCount(posts_and_comments, fb_WordCount=list()):
     for date, v in posts_and_comments.items():
         year=int(date.split('-')[0])
         vals=re.findall(r'\w+', v)
-        fb_WordCount.update(
-            { (year, val) : vals.count(val) for val in set(vals) if (len(val) >= 3) and val not in STOPWORDS }
-            )
+        fb_WordCount+=[ (year, (val, vals.count(val))) for val in set(vals) if (len(val) >= 3) and val not in STOPWORDS ]
     return fb_WordCount
 
 posts_and_comments=requestFacebookData(response_json['posts'], dict())
 
 fb_WordCount=getWordCount(posts_and_comments)
+
+
+#SPARK
+import pyspark
+import pyspark.sql.functions as sf
+import pyspark.sql.types as sparktypes
+sc = pyspark.SparkContext()
+sqlc = pyspark.SQLContext(sc)
+
+#df =  sqlc.createDataFrame(rdd, ['year', 'wordCount'])
+
+wordCount = sc.parallelize(fb_WordCount) \
+    .map(lambda x: (x[1][0], x[1][1])) \
+    .reduceByKey(lambda x,y: x+y) \
+    .collectAsMap()
+
+import json
+json.dump(wordCount, open('wordCount.json', 'w'))
+
+
+
+#WordClound
+import matplotlib.pyplot as plt
+
+faceCloudDict = json.load( open( "wordCount.json" ) )
+
+faceCloud = wordcloud.WordCloud(max_font_size=50, max_words=100, stopwords=None, background_color="white").fit_words(faceCloudDict)
+
+fig=plt.figure()
+plt.imshow(faceCloud, interpolation="bilinear")
+plt.axis("off")
+# plt.show()
+fig.savefig('faceCloud.png')
+
+
 
 
 
